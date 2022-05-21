@@ -1,4 +1,12 @@
 from random import random
+import math
+
+def truncate(number, digits) -> float:
+    nbDecimals = len(str(number).split('.')[1]) 
+    if nbDecimals <= digits:
+        return number
+    stepper = 10.0 ** digits
+    return math.trunc(stepper * number) / stepper
 
 class Polynomial():
     coefficients = []
@@ -33,8 +41,17 @@ class Polynomial():
             raise NameError("Derivative not generated")
         return self.derivative.calc(x)
 
+def newtonRaphson(x, poly):
+    return x - poly.calc(x)/poly.calcDerivative(x)
 
-poly = Polynomial([1,2,3])
+def findRoot(x0, poly):
+    iterCount = 0
+    result = x0
+    while not math.isclose(poly.calc(result), 0, rel_tol=1e-10) and iterCount < 100:
+        result = newtonRaphson(result, poly) 
+        iterCount = iterCount + 1
+    return result
+    
+poly = Polynomial([1,1,1,1,1,1])
 poly.genDerivative()
-print(poly.calc(1))
-print(poly.calcDerivative(1))
+print(findRoot(1, poly))
