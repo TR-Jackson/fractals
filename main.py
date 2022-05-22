@@ -13,22 +13,21 @@ class Polynomial():
     order = 0
     derivative = None
 
-    # Given an order, generate random coefficients
-    def __init__(self, order):
-        self.order = order
-        for i in range(order):
-            self.coefficients.append(random())
-
-    # Coefficients given
-    def __init__(self, coefficients):
-        self.order = len(coefficients) 
-        self.coefficients = coefficients
+    # Given an order, generate random coefficients or use given coefficients
+    def __init__(self, order=False, coefficients=False):
+        if order:
+            self.order = order
+            for i in range(order):
+                self.coefficients.append(random())
+        elif coefficients:
+            self.order = len(coefficients) 
+            self.coefficients = coefficients
 
     def genDerivative(self):
         derivCoes = []
         for i in range(len(self.coefficients)-1, 0, -1):
             derivCoes.append(self.coefficients[self.order-i-1] * i)
-        self.derivative = Polynomial(derivCoes)
+        self.derivative = Polynomial(coefficients=derivCoes)
 
     def calc(self, x):
         result = self.coefficients[0]
@@ -42,16 +41,27 @@ class Polynomial():
         return self.derivative.calc(x)
 
 def newtonRaphson(x, poly):
-    return x - poly.calc(x)/poly.calcDerivative(x)
+    if poly.calcDerivative(x) == 0:
+        return x, True # Won't find root
+    return x - poly.calc(x)/poly.calcDerivative(x), False
 
 def findRoot(x0, poly):
     iterCount = 0
     result = x0
-    while not math.isclose(poly.calc(result), 0, rel_tol=1e-10) and iterCount < 100:
-        result = newtonRaphson(result, poly) 
+    diverges = False
+    while not math.isclose(poly.calc(result.real), 0, abs_tol=1e-2) and not math.isclose(poly.calc(result.imag), 0, abs_tol=1e-2) and iterCount < 100 and not diverges:
+        result, diverges = newtonRaphson(result, poly) 
         iterCount = iterCount + 1
-    return result
-    
-poly = Polynomial([1,1,1,1,1,1])
+    if iterCount == 100 or diverges:
+        return False # Root not found
+    else:
+        return True # Root found
+
+
+poly = Polynomial(order=5)
 poly.genDerivative()
-print(findRoot(1, poly))
+# for x in range(-10, 10):
+#     for y in range(-10, 10):
+#         if findRoot(complex(x,y), poly):
+#     else:
+
