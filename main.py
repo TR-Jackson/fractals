@@ -81,21 +81,26 @@ def findRoot(x0, poly):
     else:
         return root # Root found
 
-poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1/2,math.sqrt(3)/2), complex(-1/2,math.sqrt(3)/2), complex(1/2,-math.sqrt(3)/2), complex(-1/2,-math.sqrt(3)/2)])
+# poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1/2,math.sqrt(3)/2), complex(-1/2,math.sqrt(3)/2), complex(1/2,-math.sqrt(3)/2), complex(-1/2,-math.sqrt(3)/2), complex(math.sqrt(3)/2,1), complex(math.sqrt(3)/2,-1), complex(-math.sqrt(3)/2,1), complex(math.sqrt(3)/2,-1)])
+poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1,1), complex(1,-1)])
 poly.genCoefficients()
 print(poly.roots)
 print(poly.coefficients)
 poly.genDerivative()
-print(poly.derivative.coefficients)
-size = 100
-points = np.ndarray(shape=(size*2,size*2))
-for x in range(-size, size, 1):
-    for y in range(-size, size, 1):
+size = 10
+step = 0.01
+xCount = 0
+points = np.ndarray(shape=(int((size/step)*2),int((size/step)*2)))
+for x in np.arange(-size, size, step):
+    yCount = 0
+    for y in np.arange(-size, size, step):
         root = findRoot(complex(x,y), poly)
         if root:
             for r in range(len(poly.roots)):
                 if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
-                    points[x+size][y+size] = r
+                    points[xCount][yCount] = r
+        yCount = yCount + 1
+    xCount = xCount + 1
 
 plt.matshow(points)
 plt.show()
