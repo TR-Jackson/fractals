@@ -1,9 +1,10 @@
 from random import random
 import math
+import matplotlib.pyplot as plt
 
 class Polynomial():
     roots = []
-    coefficient = []
+    coefficients = []
     order = 0
     derivative = None
 
@@ -24,8 +25,7 @@ class Polynomial():
         coefficients = [1]
         for i in range(self.order):
             coefficients.append((-1)**(i+1) * self.calcSumOfProducts(self.roots, i))
-        self.coefficient = coefficients
-        print(coefficients)
+        self.coefficients = coefficients
 
     def genDerivative(self):
         derivCoes = []
@@ -66,7 +66,7 @@ def findRoot(x0, poly):
     iterCount = 0
     result = x0
     diverges = False
-    while not math.isclose(poly.calc(result.real), 0, abs_tol=1e-2) and not math.isclose(poly.calc(result.imag), 0, abs_tol=1e-2) and iterCount < 100 and not diverges:
+    while not math.isclose(poly.calc(result).real, 0, abs_tol=1e-2) and not math.isclose(poly.calc(result).imag, 0, abs_tol=1e-2) and iterCount < 100 and not diverges:
         result, diverges = newtonRaphson(result, poly) 
         iterCount = iterCount + 1
     if iterCount == 100 or diverges:
@@ -77,9 +77,10 @@ def findRoot(x0, poly):
 
 poly = Polynomial(roots=[complex(1,0), complex(2,0), complex(3,0), complex(4,0), complex(217,0)])
 poly.genCoefficients()
-# poly.genDerivative()
-# for x in range(-10, 10):
-#     for y in range(-10, 10):
+poly.genDerivative()
+points = []
+# for x in range(-100, 100):
+#     for y in range(-100, 100):
 #         if findRoot(complex(x,y), poly):
-#     else:
+#             points.append(x,y)
 
