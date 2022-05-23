@@ -2,7 +2,6 @@ from random import random
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import datetime
 
 class Polynomial():
     roots = []
@@ -69,35 +68,34 @@ def newtonRaphson(x, poly):
 
 def findRoot(x0, poly):
     iterCount = 0
+    maxIter = 100
     result = poly.calc(x0)
     root = x0
     diverges = False
-    while not (math.isclose(result.real, 0, abs_tol=1e-2) and math.isclose(result.imag, 0, abs_tol=1e-2)) and iterCount < 100 and not diverges:
+    while not (math.isclose(result.real, 0, abs_tol=1e-2) and math.isclose(result.imag, 0, abs_tol=1e-2)) and iterCount < maxIter and not diverges:
         root, diverges = newtonRaphson(root, poly)
         result = poly.calc(root)
         iterCount = iterCount + 1
-    if iterCount == 100 or diverges:
-        print(iterCount)
+    if iterCount == maxIter or diverges:
         return False # Root not found
     else:
         return root # Root found
 
-
-poly = Polynomial(roots=[complex(1,0), complex(2,0), complex(1,1), complex(1,-1)])
+poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1/2,math.sqrt(3)/2), complex(-1/2,math.sqrt(3)/2), complex(1/2,-math.sqrt(3)/2), complex(-1/2,-math.sqrt(3)/2)])
 poly.genCoefficients()
 print(poly.roots)
 print(poly.coefficients)
 poly.genDerivative()
 print(poly.derivative.coefficients)
-size = 2000
-points = np.ndarray(shape=(size,size))
-for x in range(0, size):
-    for y in range(0, size):
+size = 100
+points = np.ndarray(shape=(size*2,size*2))
+for x in range(-size, size, 1):
+    for y in range(-size, size, 1):
         root = findRoot(complex(x,y), poly)
         if root:
             for r in range(len(poly.roots)):
                 if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
-                    points[x][y] = r
+                    points[x+size][y+size] = r
 
 plt.matshow(points)
 plt.show()
