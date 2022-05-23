@@ -1,27 +1,31 @@
 from random import random
 import math
 
-def truncate(number, digits) -> float:
-    nbDecimals = len(str(number).split('.')[1]) 
-    if nbDecimals <= digits:
-        return number
-    stepper = 10.0 ** digits
-    return math.trunc(stepper * number) / stepper
-
 class Polynomial():
-    coefficients = []
+    roots = []
+    coefficient = []
     order = 0
     derivative = None
 
-    # Given an order, generate random coefficients or use given coefficients
-    def __init__(self, order=False, coefficients=False):
+    # Given an order, generate random roots or use given roots
+    def __init__(self, order=False, roots=False, coefficients=False):
         if order:
             self.order = order
             for i in range(order):
-                self.coefficients.append(random())
+                self.roots.append(complex(random(), random()))
+        elif roots:
+            self.order = len(roots) 
+            self.roots = roots
         elif coefficients:
             self.order = len(coefficients) 
             self.coefficients = coefficients
+
+    def genCoefficients(self):
+        coefficients = [1]
+        for i in range(self.order):
+            coefficients.append((-1)**(i+1) * self.calcSumOfProducts(self.roots, i))
+        self.coefficient = coefficients
+        print(coefficients)
 
     def genDerivative(self):
         derivCoes = []
@@ -39,6 +43,19 @@ class Polynomial():
         if self.derivative == None:
             raise NameError("Derivative not generated")
         return self.derivative.calc(x)
+    
+    def calcSumOfProducts(self, arr, fix, x=1):
+        if fix == 0:
+            sum = 0
+            for a in arr:
+                sum = sum + x*a
+            
+            return sum
+        else:
+            sum = 0
+            for i in range(len(arr)):
+                sum = sum + self.calcSumOfProducts(arr[i+1:], fix-1, x*arr[i])
+            return sum
 
 def newtonRaphson(x, poly):
     if poly.calcDerivative(x) == 0:
@@ -58,8 +75,9 @@ def findRoot(x0, poly):
         return True # Root found
 
 
-poly = Polynomial(order=5)
-poly.genDerivative()
+poly = Polynomial(roots=[complex(1,0), complex(2,0), complex(3,0), complex(4,0), complex(217,0)])
+poly.genCoefficients()
+# poly.genDerivative()
 # for x in range(-10, 10):
 #     for y in range(-10, 10):
 #         if findRoot(complex(x,y), poly):
