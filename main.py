@@ -1,6 +1,8 @@
 from random import random
 import math
 import matplotlib.pyplot as plt
+import numpy as np
+import datetime
 
 class Polynomial():
     roots = []
@@ -81,19 +83,21 @@ def findRoot(x0, poly):
         return root # Root found
 
 
-poly = Polynomial(roots=[complex(1,0), complex(2,0)])
+poly = Polynomial(roots=[complex(1,0), complex(2,0), complex(1,1), complex(1,-1)])
 poly.genCoefficients()
 print(poly.roots)
 print(poly.coefficients)
 poly.genDerivative()
 print(poly.derivative.coefficients)
-points = []
-for x in range(-10, 10):
-    for y in range(-10, 10):
+size = 2000
+points = np.ndarray(shape=(size,size))
+for x in range(0, size):
+    for y in range(0, size):
         root = findRoot(complex(x,y), poly)
         if root:
-            for r in poly.roots:
-                if math.isclose(root.real, r.real, abs_tol=1e-1) and math.isclose(root.imag, r.imag, abs_tol=1e-1):
-                    points.append([x,y,r])
-print(points)
+            for r in range(len(poly.roots)):
+                if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
+                    points[x][y] = r
 
+plt.matshow(points)
+plt.show()
