@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
-
+from multiprocessing import Process
 
 class Polynomial():
     roots = []
@@ -104,7 +104,8 @@ else:
             if input("Add another root? y/n;    ") != "y":
                 done = True
     else:
-        roots = [complex(0,1), complex(0,-1), complex(1,0), complex(math.sqrt(2),math.sqrt(3)), complex(math.sqrt(2),-math.sqrt(3)), complex(1,math.sqrt(3)), complex(1,-math.sqrt(3))]
+        # roots = [complex(0,1), complex(0,-1), complex(1,0), complex(math.sqrt(2),math.sqrt(3)), complex(math.sqrt(2),-math.sqrt(3)), complex(1,math.sqrt(3)), complex(1,-math.sqrt(3))]
+        roots = [complex(1,1), complex(1,-1), complex(0,1), complex(0,-1), complex(0,0)]
 
     xStart = float(input("Enter start x bound;    "))
     xEnd = float(input("Enter end x bound;    "))
@@ -124,19 +125,18 @@ else:
     print(poly.coefficients)
     poly.genDerivative()
 
-    xCount = 0
     points = np.ndarray(shape=(yRes, xRes))
+
     for x in np.arange(xStart, xEnd, xStepSize):
-        yCount = 0
-        print(round((xCount/xRes)*100,2), "% Completed")
+        xIndex = int((x-xStart)/xStepSize)
+        print(round((xIndex/xRes)*100,2), "% Completed")
         for y in np.arange(yStart, yEnd, yStepSize):
+            yIndex = int(yRes-1-(y-yStart)/yStepSize)
             root = findRoot(complex(x,y), poly)
             if root:
                 for r in range(len(poly.roots)):
                     if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
-                        points[yCount][xCount] = r
-            yCount = yCount + 1
-        xCount = xCount + 1
+                        points[yIndex][xIndex] = r
     print("100% Completed")
     if input("Save? y/n;    ") == "y":
         fn = input("Fractal name;   ")
