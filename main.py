@@ -2,6 +2,9 @@ from random import random
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import cm
+from matplotlib.colors import ListedColormap
+
 
 class Polynomial():
     roots = []
@@ -81,26 +84,89 @@ def findRoot(x0, poly):
     else:
         return root # Root found
 
-# poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1/2,math.sqrt(3)/2), complex(-1/2,math.sqrt(3)/2), complex(1/2,-math.sqrt(3)/2), complex(-1/2,-math.sqrt(3)/2), complex(math.sqrt(3)/2,1), complex(math.sqrt(3)/2,-1), complex(-math.sqrt(3)/2,1), complex(math.sqrt(3)/2,-1)])
-poly = Polynomial(roots=[complex(0,1), complex(0,-1), complex(1,0), complex(1,0), complex(1,1), complex(1,-1)])
-poly.genCoefficients()
-print(poly.roots)
-print(poly.coefficients)
-poly.genDerivative()
-size = 10
-step = 0.01
-xCount = 0
-points = np.ndarray(shape=(int((size/step)*2),int((size/step)*2)))
-for x in np.arange(-size, size, step):
-    yCount = 0
-    for y in np.arange(-size, size, step):
-        root = findRoot(complex(x,y), poly)
-        if root:
-            for r in range(len(poly.roots)):
-                if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
-                    points[xCount][yCount] = r
-        yCount = yCount + 1
-    xCount = xCount + 1
 
-plt.matshow(points)
-plt.show()
+
+isLoad = input("Load fractal? y/n;   ")
+if isLoad == "y":
+    points = np.loadtxt(input("Enter fractal name;   ") + ".txt")
+    xRes = points.shape[1]
+    yRes = points.shape[0]
+else:
+    if input("Enter roots custom roots? y/n;    ") == "y":
+        done = False
+        roots = []
+        while not done:
+            real = float(input("Enter the real part of the root;   "))
+            imag = float(input("Enter the imaginary part of the root;   "))
+            roots.append(complex(real,imag))
+            if imag != 0:
+                roots.append(complex(real,-imag))
+            if input("Add another root? y/n;    ") != "y":
+                done = True
+    else:
+        roots = [complex(0,1), complex(0,-1), complex(1,0), complex(math.sqrt(2),math.sqrt(3)), complex(math.sqrt(2),-math.sqrt(3)), complex(1,math.sqrt(3)), complex(1,-math.sqrt(3))]
+
+    xStart = float(input("Enter start x bound;    "))
+    xEnd = float(input("Enter end x bound;    "))
+    yStart = float(input("Enter start y bound;    "))
+    yEnd = float(input("Enter end y bound;    "))
+
+    print("Standard resolutions: 640x480, 1280x720, 1920x1080, 2560x1440, 3840x2160, 7680x4320")
+    xRes = int(input("Enter x resolution;   "))
+    yRes = int(input("Enter y resolution;   "))
+
+    xStepSize = abs((xEnd-xStart)/xRes)
+    yStepSize = abs((yEnd-yStart)/yRes)
+
+    poly = Polynomial(roots=roots)
+    poly.genCoefficients()
+    print(poly.roots)
+    print(poly.coefficients)
+    poly.genDerivative()
+
+    xCount = 0
+    points = np.ndarray(shape=(yRes, xRes))
+    for x in np.arange(xStart, xEnd, xStepSize):
+        yCount = 0
+        print(round((xCount/xRes)*100,2), "% Completed")
+        for y in np.arange(yStart, yEnd, yStepSize):
+            root = findRoot(complex(x,y), poly)
+            if root:
+                for r in range(len(poly.roots)):
+                    if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
+                        points[yCount][xCount] = r
+            yCount = yCount + 1
+        xCount = xCount + 1
+    print("100% Completed")
+    if input("Save? y/n;    ") == "y":
+        fn = input("Fractal name;   ")
+        np.savetxt(fn + ".txt", points)
+
+
+top = cm.get_cmap('Oranges_r', 128)
+bottom = cm.get_cmap('Blues', 128)
+newcolors = np.vstack((top(np.linspace(0, 1, 128)),
+                    bottom(np.linspace(0, 1, 128))))
+newcmp = ListedColormap(newcolors, name='OrangeBlue')
+
+ppi = math.sqrt((xRes**2 + yRes**2)/23)
+
+done = False
+while not done:
+    cmap = input("Enter a colour map (v to view all cmaps);   ")
+    if cmap == "v":
+        print(plt.colormaps())
+    else:
+        if cmap == "OrangeBlue":
+            cmap == newcmp
+        fig = plt.matshow(points, cmap=cmap, fignum=1, aspect='auto')
+        plt.axis('off')
+        plt.minorticks_off()
+        plt.show()
+        cont = input("Enter a different colour map? y/n;   ")
+        if cont != "y":
+            done = True
+if input("Save fractal as image? y/n;   ") == "y":
+    plt.axis('off')
+    plt.minorticks_off()
+    plt.imsave(input("Enter a name for the fractal;   ")+".png", points, dpi=ppi, cmap=cmap)
