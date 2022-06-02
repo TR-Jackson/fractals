@@ -4,11 +4,11 @@ class Input:
 
     def __init__(self, type):
         self.type = type
-    
+
     def getInput(self, msg):
         val = None
         while True:
-            val = input(msg+";    ")
+            val = input(msg + ";    ")
             if self.type == "y/n":
                 if val.lower() == "y":
                     return True
