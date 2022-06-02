@@ -1,3 +1,4 @@
+import os
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,6 +46,10 @@ if __name__ == "__main__":
     yesNoInput = Input("y/n")
     floatInput = Input("float")
     intInput = Input("int")
+
+    for d in ["Images", "Saves", "TempSaves"]:
+        if not os.path.isdir(d):
+            os.mkdir(d)
 
     if yesNoInput.getInput("Load fractal? y/n"):
         points = np.loadtxt("Saves/" + input("Enter fractal name;   ") + ".txt")
@@ -96,6 +101,17 @@ if __name__ == "__main__":
         points = np.ndarray(shape=(yRes, xRes))
 
         if yesNoInput.getInput("Use multiprocessing? y/n"):
+            chunk = np.ndarray(shape=(yRes, xRes))
+            numChunks = 1
+            if yesNoInput.getInput(
+                "Perform in chunks to avoid running out of RAM for high resolution images? y/n"
+            ):
+                memorySize = floatInput.getInput(
+                    "How many GB of RAM available? (check msinfo32)"
+                )
+                numChunks = (
+                    math.ceil((xRes * yRes * 32) / (memorySize * (10**9) * 8)) + 1
+                )
 
             def f(y, yIndex, xStart, xEnd, xStepSize, poly):
                 res = []
@@ -115,34 +131,63 @@ if __name__ == "__main__":
             results = []
 
             start = time.perf_counter()
-            with mp.Pool(mp.cpu_count()) as pool:
-                for y in np.arange(yStart, yEnd, yStepSize):
-                    yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
-                    if yIndex + 1 == yRes:
-                        print("Tasks allocated")
-                    results.append(
-                        pool.apply_async(
-                            f,
-                            (
-                                y,
-                                yIndex,
-                                xStart,
-                                xEnd,
-                                xStepSize,
-                                poly,
-                            ),
-                        )
-                    )
+            for c in range(numChunks):
+                with mp.Pool(mp.cpu_count()) as pool:
+                    # print(
+                    #     "Processing chunk "
+                    #     + str(c + 1)
+                    #     + " from "
+                    #     + str(yStart + yRes * (c / numChunks) * yStepSize)
+                    #     + " to "
+                    #     + str(
+                    #         yStart
+                    #         + yRes * ((c + 1) / numChunks) * yStepSize
+                    #         - yStepSize
+                    #     )
+                    # )
+                    if numChunks > 1:
+                        print("Processing chunk " + str(c + 1) + "/" + str(numChunks))
 
-                pool.close()
-                pool.join()
-                for r in results:
-                    res = r.get()
-                    for p in res:
-                        xIndex = p[0]
-                        yIndex = p[1]
-                        val = p[2]
-                        points[yIndex][xIndex] = val
+                    for y in np.arange(
+                        yStart + yRes * (c / numChunks) * yStepSize,
+                        yStart + yRes * ((c + 1) / numChunks) * yStepSize,
+                        yStepSize,
+                    ):
+                        yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
+                        results.append(
+                            pool.apply_async(
+                                f,
+                                (
+                                    y,
+                                    yIndex,
+                                    xStart,
+                                    xEnd,
+                                    xStepSize,
+                                    poly,
+                                ),
+                            )
+                        )
+                    pool.close()
+                    pool.join()
+                    for r in results:
+                        res = r.get()
+                        for p in res:
+                            xIndex = p[0]
+                            yIndex = p[1]
+                            val = p[2]
+                            if numChunks > 1:
+                                chunk[yIndex][xIndex] = val
+                            else:
+                                points[yIndex][xIndex] = val
+
+                    if numChunks > 1:
+                        np.savetxt("TempSaves/Chunk" + str(c) + ".txt", chunk)
+
+            if numChunks > 1:
+                for c in range(numChunks - 1, -1, -1):
+                    chunk = np.loadtxt("TempSaves/Chunk" + str(c) + ".txt")
+                    points = points + chunk
+                    os.remove("TempSaves/Chunk" + str(c) + ".txt")
 
         else:
             start = time.perf_counter()
