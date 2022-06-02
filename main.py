@@ -1,4 +1,3 @@
-from random import random
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -7,59 +6,8 @@ from matplotlib.colors import ListedColormap
 import multiprocess as mp
 import time
 
-class Polynomial():
-    roots = []
-    coefficients = []
-    order = 0
-    derivative = None
-
-    def __init__(self, order=False, roots=False, coefficients=False):
-        if order:
-            self.order = order
-            for i in range(order):
-                self.roots.append(complex(random(), random()))
-        elif roots:
-            self.order = len(roots) 
-            self.roots = roots
-        elif coefficients:
-            self.order = len(coefficients)-1
-            self.coefficients = coefficients
-
-    def genCoefficients(self):
-        coefficients = [1.0]
-        for i in range(self.order):
-            coefficients.append(((-1)**(i+1) * self.calcSumOfProducts(self.roots, i)).real)
-        self.coefficients = coefficients
-
-    def genDerivative(self):
-        derivCoes = []
-        for i in range(len(self.coefficients)-1):
-            derivCoes.append((len(self.coefficients)-1-i)*self.coefficients[i])
-        self.derivative = Polynomial(coefficients=derivCoes)
-
-    def calc(self, x):
-        result = self.coefficients[0]
-        for c in range(1, self.order+1):
-            result = result * x + self.coefficients[c]
-        return result
-    
-    def calcDerivative(self, x):
-        if self.derivative == None:
-            raise NameError("Derivative not generated")
-        return self.derivative.calc(x)
-    
-    def calcSumOfProducts(self, arr, fix, x=1):
-        if fix == 0:
-            sum = 0
-            for a in arr:
-                sum = sum + x*a
-            
-            return sum
-        else:
-            sum = 0
-            for i in range(len(arr)):
-                sum = sum + self.calcSumOfProducts(arr[i+1:], fix-1, x*arr[i])
-            return sum
+from MyPolynomial import Polynomial
+from MyInput import Input
 
 def newtonRaphson(x, poly):
     fPrime = poly.calcDerivative(x)
@@ -83,38 +31,40 @@ def findRoot(x0, poly):
     else:
         return root # Root found
 
-
-
 if __name__ == "__main__":
-    isLoad = input("Load fractal? y/n;   ")
-    if isLoad == "y":
-        points = np.loadtxt(input("Enter fractal name;   ") + ".txt")
+    yesNoInput = Input("y/n")
+    floatInput = Input("float")
+    intInput = Input("int")
+
+    if yesNoInput.getInput("Load fractal? y/n"):
+        points = np.loadtxt("Saves/" + input("Enter fractal name;   ") + ".txt")
         xRes = points.shape[1]
         yRes = points.shape[0]
     else:
-        if input("Enter roots custom roots? y/n;    ") == "y":
+        if yesNoInput.getInput("Enter custom roots? y/n"):
             done = False
             roots = []
+            rootInput = Input("float")
             while not done:
-                real = float(input("Enter the real part of the root;   "))
-                imag = float(input("Enter the imaginary part of the root;   "))
+                real = rootInput.getInput("Enter the real part of the root")
+                imag = rootInput.getInput("Enter the imaginary part of the root")
                 roots.append(complex(real,imag))
                 if imag != 0:
                     roots.append(complex(real,-imag))
-                if input("Add another root? y/n;    ") != "y":
+                if not yesNoInput.getInput("Add another root? y/n"):
                     done = True
         else:
             # roots = [complex(0,1), complex(0,-1), complex(1,0), complex(math.sqrt(2),math.sqrt(3)), complex(math.sqrt(2),-math.sqrt(3)), complex(1,math.sqrt(3)), complex(1,-math.sqrt(3))]
             roots = [complex(1,1), complex(1,-1), complex(0,1), complex(0,-1), complex(0,0)]
 
-        xStart = float(input("Enter start x bound;    "))
-        xEnd = float(input("Enter end x bound;    "))
-        yStart = float(input("Enter start y bound;    "))
-        yEnd = float(input("Enter end y bound;    "))
+        xStart = floatInput.getInput("Enter start x bound")
+        xEnd = floatInput.getInput("Enter end x bound")
+        yStart = floatInput.getInput("Enter start y bound")
+        yEnd = floatInput.getInput("Enter end y bound")
 
         print("Standard resolutions: 640x480, 1280x720, 1920x1080, 2560x1440, 3840x2160, 7680x4320")
-        xRes = int(input("Enter x resolution;   "))
-        yRes = int(input("Enter y resolution;   "))
+        xRes = intInput.getInput("Enter x resolution")
+        yRes = intInput.getInput("Enter y resolution")
 
         xStepSize = abs((xEnd-xStart)/xRes)
         yStepSize = abs((yEnd-yStart)/yRes)
@@ -127,28 +77,7 @@ if __name__ == "__main__":
 
         points = np.ndarray(shape=(yRes, xRes))
 
-        if input("Use multiprocessing? y/n;   ") == "y":
-            start = time.perf_counter()
-            # More processes with fewer tasks each
-            # def f(x, xIndex, yStart, yEnd, yStepSize, yRes, poly):
-            #     res = []
-            #     for y in np.arange(yStart, yEnd, yStepSize):
-            #         yIndex = int(yRes-1-(y-yStart)/yStepSize)
-            #         root = findRoot(complex(x,y), poly)
-            #         if root:
-            #             for r in range(len(poly.roots)):
-            #                 if math.isclose(root.real, poly.roots[r].real, abs_tol=1e-1) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
-            #                     res.append([xIndex, yIndex, r])
-            #     return res
-
-            # results = []
-
-            # with mp.Pool(mp.cpu_count()) as pool:
-            #     for x in np.arange(xStart, xEnd, xStepSize):
-            #         xIndex = int((x-xStart)/xStepSize)
-            #         if (xIndex+1 == xRes): print("Generation complete")
-            #         results.append(pool.apply_async(f, (x,xIndex, yStart, yEnd, yStepSize, yRes, poly,)))
-
+        if yesNoInput.getInput("Use multiprocessing? y/n"):
             def f(y, yIndex, xStart, xEnd, xStepSize, poly):
                 res = []
                 for x in np.arange(xStart, xEnd, xStepSize):
@@ -162,10 +91,11 @@ if __name__ == "__main__":
 
             results = []
 
+            start = time.perf_counter()
             with mp.Pool(mp.cpu_count()) as pool:
                 for y in np.arange(yStart, yEnd, yStepSize):
                     yIndex = int(yRes-1-(y-yStart)/yStepSize)
-                    if (yIndex+1 == yRes): print("Generation complete")
+                    if (yIndex+1 == yRes): print("Tasks allocated")
                     results.append(pool.apply_async(f, (y, yIndex, xStart, xEnd, xStepSize, poly,)))
 
                 pool.close()
@@ -197,10 +127,8 @@ if __name__ == "__main__":
         mins = math.trunc((timeTaken - hrs*60**2)/60)
         secs = math.trunc((timeTaken - hrs*60**2 - mins*60))
         print("Time taken: ", hrs,"hours,",mins,"minutes and",secs,"seconds")
-        if input("Save? y/n;    ") == "y":
-            fn = input("Fractal name;   ")
-            np.savetxt(fn + ".txt", points)
-
+        if yesNoInput.getInput("Save? y/n"):
+            np.savetxt("Saves/" + input("Fractal name;   ") + ".txt", points)
 
     top = cm.get_cmap('Oranges_r', 128)
     bottom = cm.get_cmap('Blues', 128)
@@ -222,10 +150,9 @@ if __name__ == "__main__":
             plt.axis('off')
             plt.minorticks_off()
             plt.show()
-            cont = input("Enter a different colour map? y/n;   ")
-            if cont != "y":
+            if not yesNoInput.getInput("Choose a different colour map? y/n"):
                 done = True
-    if input("Save fractal as image? y/n;   ") == "y":
+    if yesNoInput.getInput("Save fractal as image? y/n"):
         plt.axis('off')
         plt.minorticks_off()
-        plt.imsave(input("Enter a name for the fractal;   ")+".png", points, dpi=ppi, cmap=cmap)
+        plt.imsave("Images/" + input("Enter a name for the fractal;   ")+".png", points, dpi=ppi, cmap=cmap)
