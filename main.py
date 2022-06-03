@@ -84,7 +84,7 @@ if __name__ == "__main__":
         yEnd = floatInput.getInput("Enter end y bound")
 
         print(
-            "Standard resolutions: 640x480, 1280x720, 1920x1080, 2560x1440, 3840x2160, 7680x4320"
+            "Standard resolutions: 640x480 (480p), 1280x720 (720p), 1920x1080 (1080p), 2560x1440 (1440p), 3840x2160 (4K), 7680x4320 (8K), 15360×8640 (16K), 30720x17280 (32K), 61440x34560 (64K), 122880x69120 (128K)"
         )
         xRes = intInput.getInput("Enter x resolution")
         yRes = intInput.getInput("Enter y resolution")
