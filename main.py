@@ -45,7 +45,24 @@ def findRoot(x0, poly):
 
 def compileChunks(fn, cmap):
     with open(fn, "r") as f:
-        print("TO DO")
+        numChunks = int(f.readline().strip())
+        xRes, yRes = [int(x) for x in f.readline().strip().split(" ")]
+        for c in range(numChunks):
+            rows, columns = [int(x) for x in f.readline().strip().split(" ")]
+            chunk = np.ndarray(shape=(rows, columns))
+            for y in range(rows):
+                row = f.readline().strip().split(" ")
+                for x in range(len(row)):
+                    chunk[y][x] = row[x]
+            plt.matshow(chunk, cmap=cmap, fignum=1, aspect="auto")
+            plt.axis("off")
+            plt.minorticks_off()
+            plt.imsave(
+                "TempSaves/Chunk" + str(c) + ".png",
+                chunk,
+                dpi=math.sqrt((xRes**2 + yRes**2) / 23),
+                cmap=cmap,
+            )
 
 
 if __name__ == "__main__":
@@ -53,14 +70,16 @@ if __name__ == "__main__":
     floatInput = Input("float")
     intInput = Input("int")
 
-    for d in ["Images", "Saves"]:
+    for d in ["Images", "Saves", "TempSaves"]:
         if not os.path.isdir(d):
             os.mkdir(d)
 
     if yesNoInput.getInput("Load fractal? y/n"):
-        points = np.loadtxt("Saves/" + input("Enter fractal name;   ") + ".txt")
-        xRes = points.shape[1]
-        yRes = points.shape[0]
+        compileChunks("Saves/" + input("Enter fractal name;   ") + ".txt", "ocean")
+
+        # points = np.loadtxt("Saves/" + input("Enter fractal name;   ") + ".txt")
+        # xRes = points.shape[1]
+        # yRes = points.shape[0]
     else:
         if yesNoInput.getInput("Enter custom roots? y/n"):
             done = False
@@ -114,24 +133,52 @@ if __name__ == "__main__":
             print(
                 "Insuffient memory to generate image in one go, must save now and compile later"
             )
-            numChunks = math.ceil((arrSize * 1.5) / memory) + 1
-
             # File format:
             # Number of chunks
             # Each chunk is preceeded by the number of rows for that chunk
             with open(
                 "Saves/" + input("Enter a name for the fractal;    ") + ".txt", "wt"
             ) as save:
-                save.write(str(numChunks) + "\n")
                 start = time.perf_counter()
+                rowsCount = 0
+                cYRes = 100
+                # cYRes = math.trunc(
+                #     (64 * xRes / 8) / (memory * 0.75)
+                # )  # float64 used for each array index
+                numChunks = math.ceil(yRes / cYRes)
+                save.write(str(numChunks) + "\n")
+                save.write(str(xRes) + " " + str(yRes) + "\n")
 
-                for c in range(numChunks):
-                    cYStart = yStart + yRes * (c / numChunks) * yStepSize
-                    cYEnd = yStart + yRes * ((c + 1) / numChunks) * yStepSize
-                    cYRes = int((cYEnd - cYStart) / yStepSize)
-                    chunk = np.ndarray(shape=(int((cYEnd - cYStart) / yStepSize), xRes))
-                    save.write(str(cYRes) + "\n")
-                    print("Processing chunk " + str(c + 1) + "/" + str(numChunks))
+                while rowsCount < yRes:
+                    cYStart = (
+                        int((yStart + rowsCount * yStepSize) / yStepSize) * yStepSize
+                    )
+                    cYEnd = (
+                        int(
+                            (yStart + rowsCount * yStepSize + cYRes * yStepSize)
+                            / yStepSize
+                        )
+                        * yStepSize
+                    )
+                    if cYEnd > yEnd:
+                        cYEnd = yEnd
+
+                    rowsCount = rowsCount + cYRes
+
+                    chunk = None
+                    rows = cYRes
+                    if rowsCount > yRes:
+                        rows = cYRes - (rowsCount - yRes)
+
+                    chunk = np.ndarray(shape=(rows, xRes))
+                    save.write(str(rows) + " " + str(xRes) + "\n")
+
+                    print(
+                        "Processing chunk "
+                        + str(math.ceil(rowsCount / cYRes))
+                        + "/"
+                        + str(numChunks)
+                    )
 
                     def f(y, yIndex, xStart, xEnd, xStepSize, poly):
                         res = []
@@ -150,12 +197,10 @@ if __name__ == "__main__":
 
                     results = []
 
-                    start = time.perf_counter()
                     with mp.Pool(mp.cpu_count()) as pool:
                         for y in np.arange(cYStart, cYEnd, yStepSize):
-                            yIndex = int(cYRes - 1 - (y - yStart) / yStepSize)
-                            if yIndex + 1 == cYRes:
-                                print("Tasks allocated")
+                            # yIndex = int(cYRes - 1 - (y - yStart) / yStepSize)
+                            yIndex = int((y - yStart) / yStepSize)
                             results.append(
                                 pool.apply_async(
                                     f,
@@ -178,13 +223,14 @@ if __name__ == "__main__":
                                 xIndex = p[0]
                                 yIndex = p[1]
                                 val = p[2]
-                                chunk[yIndex][xIndex] = val
+                                chunk[yIndex % cYRes][xIndex] = val
 
-                    for y in range(cYRes):
+                    for y in range(rows):
                         rowToSave = ""
                         for x in range(xRes):
                             rowToSave = rowToSave + str(chunk[y][x]) + " "
                         save.write(rowToSave + "\n")
+
             print("100% Completed")
             timeTaken = time.perf_counter() - start
             hrs = math.trunc(timeTaken / (60**2))
