@@ -7,6 +7,7 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap
 import multiprocess as mp
 import time
+from PIL import Image
 
 from MyPolynomial import Polynomial
 from MyInput import Input
@@ -43,8 +44,44 @@ def findRoot(x0, poly):
         return root  # Root found
 
 
+def displayPoints(points):
+    yesNoInput = Input("y/n")
+    xRes = points.shape[1]
+    yRes = points.shape[0]
+    top = cm.get_cmap("Oranges_r", 128)
+    bottom = cm.get_cmap("Blues", 128)
+    newcolors = np.vstack((top(np.linspace(0, 1, 128)), bottom(np.linspace(0, 1, 128))))
+    newcmp = ListedColormap(newcolors, name="OrangeBlue")
+
+    ppi = math.sqrt((xRes**2 + yRes**2) / 23)
+
+    done = False
+    while not done:
+        cmap = input("Enter a colour map (v to view all cmaps);   ")
+        if cmap == "v":
+            print(plt.colormaps())
+        else:
+            if cmap == "OrangeBlue":
+                cmap = newcmp
+            fig = plt.matshow(points, cmap=cmap, fignum=1, aspect="auto")
+            plt.axis("off")
+            plt.minorticks_off()
+            plt.show()
+            if not yesNoInput.getInput("Choose a different colour map? y/n"):
+                done = True
+    if yesNoInput.getInput("Save fractal as image? y/n"):
+        plt.axis("off")
+        plt.minorticks_off()
+        plt.imsave(
+            "Images/" + input("Enter a name for the fractal;   ") + ".png",
+            points,
+            dpi=ppi,
+            cmap=cmap,
+        )
+
+
 def compileChunks(fn, cmap):
-    with open(fn, "r") as f:
+    with open("Saves/" + fn + ".txt", "r") as f:
         numChunks = int(f.readline().strip())
         xRes, yRes = [int(x) for x in f.readline().strip().split(" ")]
         for c in range(numChunks):
@@ -63,6 +100,18 @@ def compileChunks(fn, cmap):
                 dpi=math.sqrt((xRes**2 + yRes**2) / 23),
                 cmap=cmap,
             )
+        f.close()
+        chunks = [
+            Image.open("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)
+        ]
+
+        cMerge = Image.new(chunks[0].mode, (xRes, yRes))
+        y = 0
+        for c in chunks:
+            cMerge.paste(c, (0, y))
+            y += c.height
+        cMerge.save("Images/" + fn + ".png")
+        [os.remove("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)]
 
 
 if __name__ == "__main__":
@@ -75,11 +124,15 @@ if __name__ == "__main__":
             os.mkdir(d)
 
     if yesNoInput.getInput("Load fractal? y/n"):
-        compileChunks("Saves/" + input("Enter fractal name;   ") + ".txt", "ocean")
+        saveName = input("Enter fractal name;   ")
+        try:
+            with open("Saves/" + saveName + ".txt") as f:
+                numChunks = int(f.readline())
+                compileChunks(saveName)
+        except:
+            points = np.loadtxt("Saves/" + saveName + ".txt")
+            displayPoints(points)
 
-        # points = np.loadtxt("Saves/" + input("Enter fractal name;   ") + ".txt")
-        # xRes = points.shape[1]
-        # yRes = points.shape[0]
     else:
         if yesNoInput.getInput("Enter custom roots? y/n"):
             done = False
@@ -128,23 +181,20 @@ if __name__ == "__main__":
 
         start = None
 
-        # if arrSize * 1.5 > memory:
-        if True:
+        if arrSize * 1.5 > memory:
             print(
                 "Insuffient memory to generate image in one go, must save now and compile later"
             )
             # File format:
             # Number of chunks
             # Each chunk is preceeded by the number of rows for that chunk
-            with open(
-                "Saves/" + input("Enter a name for the fractal;    ") + ".txt", "wt"
-            ) as save:
+            saveName = input("Enter a name for the fractal;    ")
+            with open("Saves/" + saveName + ".txt", "wt") as save:
                 start = time.perf_counter()
                 rowsCount = 0
-                cYRes = 100
-                # cYRes = math.trunc(
-                #     (64 * xRes / 8) / (memory * 0.75)
-                # )  # float64 used for each array index
+                cYRes = math.trunc(
+                    (0.75 * memory * 8) / (xRes * 64)
+                )  # float64 used for each array index
                 numChunks = math.ceil(yRes / cYRes)
                 save.write(str(numChunks) + "\n")
                 save.write(str(xRes) + " " + str(yRes) + "\n")
@@ -199,7 +249,6 @@ if __name__ == "__main__":
 
                     with mp.Pool(mp.cpu_count()) as pool:
                         for y in np.arange(cYStart, cYEnd, yStepSize):
-                            # yIndex = int(cYRes - 1 - (y - yStart) / yStepSize)
                             yIndex = int((y - yStart) / yStepSize)
                             results.append(
                                 pool.apply_async(
@@ -256,10 +305,7 @@ if __name__ == "__main__":
                 else:
                     if cmap == "OrangeBlue":
                         cmap = newcmp
-                    fig = plt.matshow(points, cmap=cmap, fignum=1, aspect="auto")
-                    plt.axis("off")
-                    plt.minorticks_off()
-                    plt.show()
+                    compileChunks(saveName, cmap=cmap)
                     if not yesNoInput.getInput("Choose a different colour map? y/n"):
                         done = True
 
@@ -289,8 +335,6 @@ if __name__ == "__main__":
                 with mp.Pool(mp.cpu_count()) as pool:
                     for y in np.arange(yStart, yEnd, yStepSize):
                         yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
-                        if yIndex + 1 == yRes:
-                            print("Tasks allocated")
                         results.append(
                             pool.apply_async(
                                 f,
@@ -340,36 +384,4 @@ if __name__ == "__main__":
             print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
             if yesNoInput.getInput("Save? y/n"):
                 np.savetxt("Saves/" + input("Fractal name;   ") + ".txt", points)
-
-            top = cm.get_cmap("Oranges_r", 128)
-            bottom = cm.get_cmap("Blues", 128)
-            newcolors = np.vstack(
-                (top(np.linspace(0, 1, 128)), bottom(np.linspace(0, 1, 128)))
-            )
-            newcmp = ListedColormap(newcolors, name="OrangeBlue")
-
-            ppi = math.sqrt((xRes**2 + yRes**2) / 23)
-
-            done = False
-            while not done:
-                cmap = input("Enter a colour map (v to view all cmaps);   ")
-                if cmap == "v":
-                    print(plt.colormaps())
-                else:
-                    if cmap == "OrangeBlue":
-                        cmap = newcmp
-                    fig = plt.matshow(points, cmap=cmap, fignum=1, aspect="auto")
-                    plt.axis("off")
-                    plt.minorticks_off()
-                    plt.show()
-                    if not yesNoInput.getInput("Choose a different colour map? y/n"):
-                        done = True
-            if yesNoInput.getInput("Save fractal as image? y/n"):
-                plt.axis("off")
-                plt.minorticks_off()
-                plt.imsave(
-                    "Images/" + input("Enter a name for the fractal;   ") + ".png",
-                    points,
-                    dpi=ppi,
-                    cmap=cmap,
-                )
+            displayPoints(points)
