@@ -128,7 +128,7 @@ if __name__ == "__main__":
         try:
             with open("Saves/" + saveName + ".txt") as f:
                 numChunks = int(f.readline())
-                compileChunks(saveName)
+                compileChunks(saveName, input("Enter a colour map;    "))
         except:
             points = np.loadtxt("Saves/" + saveName + ".txt")
             displayPoints(points)
@@ -181,7 +181,8 @@ if __name__ == "__main__":
 
         start = None
 
-        if arrSize * 1.5 > memory:
+        # if arrSize > memory * 0.5:
+        if True:
             print(
                 "Insuffient memory to generate image in one go, must save now and compile later"
             )
@@ -193,12 +194,12 @@ if __name__ == "__main__":
                 start = time.perf_counter()
                 rowsCount = 0
                 cYRes = math.trunc(
-                    (0.75 * memory * 8) / (xRes * 64)
+                    (0.5 * memory * 8) / (xRes * 64 * 4)
                 )  # float64 used for each array index
                 numChunks = math.ceil(yRes / cYRes)
                 save.write(str(numChunks) + "\n")
                 save.write(str(xRes) + " " + str(yRes) + "\n")
-
+                save.flush()
                 while rowsCount < yRes:
                     cYStart = (
                         int((yStart + rowsCount * yStepSize) / yStepSize) * yStepSize
@@ -215,7 +216,6 @@ if __name__ == "__main__":
 
                     rowsCount = rowsCount + cYRes
 
-                    chunk = None
                     rows = cYRes
                     if rowsCount > yRes:
                         rows = cYRes - (rowsCount - yRes)
@@ -266,6 +266,7 @@ if __name__ == "__main__":
 
                         pool.close()
                         pool.join()
+
                         for r in results:
                             res = r.get()
                             for p in res:
@@ -279,6 +280,9 @@ if __name__ == "__main__":
                         for x in range(xRes):
                             rowToSave = rowToSave + str(chunk[y][x]) + " "
                         save.write(rowToSave + "\n")
+
+                    save.flush()
+                    chunk = None
 
             print("100% Completed")
             timeTaken = time.perf_counter() - start
