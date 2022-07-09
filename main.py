@@ -181,8 +181,7 @@ if __name__ == "__main__":
 
         start = None
 
-        # if arrSize > memory * 0.5:
-        if True:
+        if arrSize > memory * 0.5:
             print(
                 "Insuffient memory to generate image in one go, must save now and compile later"
             )
