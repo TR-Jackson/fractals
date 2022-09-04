@@ -6,8 +6,10 @@ import numpy as np
 from matplotlib import cm
 from matplotlib.colors import ListedColormap
 import multiprocess as mp
+from contextlib import closing
 import time
 from PIL import Image
+from guppy import hpy
 
 from MyPolynomial import Polynomial
 from MyInput import Input
@@ -23,25 +25,29 @@ def newtonRaphson(x, poly):
 
 def findRoot(x0, poly):
     iterCount = 0
-    maxIter = 100
+    maxIter = 1000
     result = poly.calc(x0)
     root = x0
-    diverges = False
+    gradZero = False
     while (
         not (
             math.isclose(result.real, 0, abs_tol=1e-2)
             and math.isclose(result.imag, 0, abs_tol=1e-2)
         )
         and iterCount < maxIter
-        and not diverges
+        and not gradZero
     ):
-        root, diverges = newtonRaphson(root, poly)
+        root, gradZero = newtonRaphson(root, poly)
         result = poly.calc(root)
         iterCount = iterCount + 1
-    if iterCount == maxIter or diverges:
-        return False  # Root not found
+    if iterCount == maxIter or gradZero:
+        if gradZero:
+            print("gradient zero")
+        if iterCount == maxIter:
+            print("maxed iters reached")
+        return False, False  # Root not found
     else:
-        return root  # Root found
+        return root, True  # Root found
 
 
 def displayPoints(points):
@@ -81,37 +87,107 @@ def displayPoints(points):
 
 
 def compileChunks(fn, cmap):
-    with open("Saves/" + fn + ".txt", "r") as f:
-        numChunks = int(f.readline().strip())
-        xRes, yRes = [int(x) for x in f.readline().strip().split(" ")]
-        for c in range(numChunks):
-            rows, columns = [int(x) for x in f.readline().strip().split(" ")]
-            chunk = np.ndarray(shape=(rows, columns))
-            for y in range(rows):
-                row = f.readline().strip().split(" ")
-                for x in range(len(row)):
-                    chunk[y][x] = row[x]
-            plt.matshow(chunk, cmap=cmap, fignum=1, aspect="auto")
-            plt.axis("off")
-            plt.minorticks_off()
-            plt.imsave(
-                "TempSaves/Chunk" + str(c) + ".png",
-                chunk,
-                dpi=math.sqrt((xRes**2 + yRes**2) / 23),
-                cmap=cmap,
-            )
-        f.close()
-        chunks = [
-            Image.open("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)
-        ]
+    md = open("Saves/" + fn + ".txt", "r")
+    numChunks = int(md.readline().strip())
+    xRes, yRes = [int(x) for x in md.readline().strip().split(" ")]
 
-        cMerge = Image.new(chunks[0].mode, (xRes, yRes))
-        y = 0
-        for c in chunks:
-            cMerge.paste(c, (0, y))
-            y += c.height
-        cMerge.save("Images/" + fn + ".png")
-        [os.remove("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)]
+    for c in range(numChunks):
+        chunk = np.loadtxt("Saves/" + fn + str(c) + ".txt")
+        plt.matshow(chunk, cmap=cmap, fignum=1, aspect="auto")
+        plt.axis("off")
+        plt.minorticks_off()
+        plt.imsave(
+            "TempSaves/Chunk" + str(c) + ".png",
+            chunk,
+            dpi=math.sqrt((xRes**2 + yRes**2) / 23),
+            cmap=cmap,
+        )
+    chunks = [Image.open("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)]
+    chunks = chunks[::-1]
+    cMerge = Image.new(chunks[0].mode, (xRes, yRes))
+    y = 0
+    for c in chunks:
+        cMerge.paste(c, (0, y))
+        y += c.height
+    cMerge.save("Images/" + fn + ".png")
+    [os.remove("TempSaves/Chunk" + str(x) + ".png") for x in range(numChunks)]
+
+
+def genFractalImage(
+    poly, xStart, xEnd, yStart, yEnd, xRes, yRes, fName, useMP
+):  # saves the fractal as txt and returns the points
+    xStepSize = abs((xEnd - xStart) / xRes)
+    yStepSize = abs((yEnd - yStart) / yRes)
+    points = np.ndarray(shape=(yRes, xRes))
+
+    if useMP:
+
+        def f(y, yIndex, xStart, xEnd, xStepSize, poly):
+            res = []
+            for x in np.arange(xStart, xEnd, xStepSize):
+                xIndex = int((x - xStart) / xStepSize)
+                root, rootFound = findRoot(complex(x, y), poly)
+                if rootFound:
+                    for r in range(len(poly.roots)):
+                        if math.isclose(
+                            root.real, poly.roots[r].real, abs_tol=1e-1
+                        ) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
+                            res.append([xIndex, yIndex, r])
+            return res
+
+        results = []
+
+        start = time.perf_counter()
+        with mp.Pool(mp.cpu_count()) as pool:
+            for y in np.arange(yStart, yEnd, yStepSize):
+                yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
+                results.append(
+                    pool.apply_async(
+                        f,
+                        (
+                            y,
+                            yIndex,
+                            xStart,
+                            xEnd,
+                            xStepSize,
+                            poly,
+                        ),
+                    )
+                )
+
+            pool.close()
+            pool.join()
+            for r in results:
+                res = r.get()
+                for p in res:
+                    xIndex = p[0]
+                    yIndex = p[1]
+                    val = p[2]
+                    points[yIndex][xIndex] = val
+
+    else:
+        start = time.perf_counter()
+        for x in np.arange(xStart, xEnd, xStepSize):
+            xIndex = int((x - xStart) / xStepSize)
+            print(round((xIndex / xRes) * 100, 2), "% Completed")
+            for y in np.arange(yStart, yEnd, yStepSize):
+                yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
+                root = findRoot(complex(x, y), poly)
+                if root:
+                    for r in range(len(poly.roots)):
+                        if math.isclose(
+                            root.real, poly.roots[r].real, abs_tol=1e-1
+                        ) and math.isclose(root.imag, poly.roots[r].imag, abs_tol=1e-1):
+                            points[yIndex][xIndex] = r
+
+    print("100% Completed")
+    timeTaken = time.perf_counter() - start
+    hrs = math.trunc(timeTaken / (60**2))
+    mins = math.trunc((timeTaken - hrs * 60**2) / 60)
+    secs = math.trunc((timeTaken - hrs * 60**2 - mins * 60))
+    print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
+    np.savetxt("Saves/" + fName + ".txt", points)
+    return points
 
 
 if __name__ == "__main__":
@@ -167,34 +243,33 @@ if __name__ == "__main__":
         xRes = intInput.getInput("Enter x resolution")
         yRes = intInput.getInput("Enter y resolution")
 
-        xStepSize = abs((xEnd - xStart) / xRes)
-        yStepSize = abs((yEnd - yStart) / yRes)
-
         poly = Polynomial(roots=roots)
         poly.genCoefficients()
         print("Roots: ", poly.roots)
         print("Coefficients: ", poly.coefficients)
         poly.genDerivative()
 
+        fName = input("Enter a name for the fractal;    ")
+        useMP = yesNoInput.getInput("Use multiprocessing? y/n")
+
         memory = psutil.virtual_memory().available
         arrSize = (yRes * xRes * 64) / 8
-
         start = None
-
-        if arrSize > memory * 0.5:
+        # if arrSize > memory * 0.55:
+        if True:
             print(
                 "Insuffient memory to generate image in one go, must save now and compile later"
             )
-            # File format:
-            # Number of chunks
-            # Each chunk is preceeded by the number of rows for that chunk
-            saveName = input("Enter a name for the fractal;    ")
-            with open("Saves/" + saveName + ".txt", "wt") as save:
+            xStepSize = abs((xEnd - xStart) / xRes)
+            yStepSize = abs((yEnd - yStart) / yRes)
+            with open("Saves/" + fName + ".txt", "wt") as save:  # main save file
                 start = time.perf_counter()
                 rowsCount = 0
-                cYRes = math.trunc(
-                    (0.5 * memory * 8) / (xRes * 64 * 4)
-                )  # float64 used for each array index
+                cCount = 0
+                # cYRes = math.trunc(
+                #     (0.5 * memory * 8) / (xRes * 64 * 4)
+                # )  # float64 used fo each array index
+                cYRes = 100
                 numChunks = math.ceil(yRes / cYRes)
                 save.write(str(numChunks) + "\n")
                 save.write(str(xRes) + " " + str(yRes) + "\n")
@@ -219,9 +294,8 @@ if __name__ == "__main__":
                     if rowsCount > yRes:
                         rows = cYRes - (rowsCount - yRes)
 
-                    chunk = np.ndarray(shape=(rows, xRes))
                     save.write(str(rows) + " " + str(xRes) + "\n")
-
+                    save.flush()
                     print(
                         "Processing chunk "
                         + str(math.ceil(rowsCount / cYRes))
@@ -229,66 +303,34 @@ if __name__ == "__main__":
                         + str(numChunks)
                     )
 
-                    def f(y, yIndex, xStart, xEnd, xStepSize, poly):
-                        res = []
-                        for x in np.arange(xStart, xEnd, xStepSize):
-                            xIndex = int((x - xStart) / xStepSize)
-                            root = findRoot(complex(x, y), poly)
-                            if root:
-                                for r in range(len(poly.roots)):
-                                    if math.isclose(
-                                        root.real, poly.roots[r].real, abs_tol=1e-1
-                                    ) and math.isclose(
-                                        root.imag, poly.roots[r].imag, abs_tol=1e-1
-                                    ):
-                                        res.append([xIndex, yIndex, r])
-                        return res
+                    genFractalImage(
+                        poly,
+                        xStart,
+                        xEnd,
+                        cYStart,
+                        cYEnd,
+                        xRes,
+                        cYRes,
+                        fName + str(cCount),
+                        useMP,
+                    )
+                    cCount += 1
+                save.close()
 
-                    results = []
-
-                    with mp.Pool(mp.cpu_count()) as pool:
-                        for y in np.arange(cYStart, cYEnd, yStepSize):
-                            yIndex = int((y - yStart) / yStepSize)
-                            results.append(
-                                pool.apply_async(
-                                    f,
-                                    (
-                                        y,
-                                        yIndex,
-                                        xStart,
-                                        xEnd,
-                                        xStepSize,
-                                        poly,
-                                    ),
-                                )
-                            )
-
-                        pool.close()
-                        pool.join()
-
-                        for r in results:
-                            res = r.get()
-                            for p in res:
-                                xIndex = p[0]
-                                yIndex = p[1]
-                                val = p[2]
-                                chunk[yIndex % cYRes][xIndex] = val
-
-                    for y in range(rows):
-                        rowToSave = ""
-                        for x in range(xRes):
-                            rowToSave = rowToSave + str(chunk[y][x]) + " "
-                        save.write(rowToSave + "\n")
-
-                    save.flush()
-                    chunk = None
-
-            print("100% Completed")
+            print("All Chunks 100% Completed")
             timeTaken = time.perf_counter() - start
             hrs = math.trunc(timeTaken / (60**2))
             mins = math.trunc((timeTaken - hrs * 60**2) / 60)
             secs = math.trunc((timeTaken - hrs * 60**2 - mins * 60))
-            print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
+            print(
+                "Total Time taken: ",
+                hrs,
+                "hours,",
+                mins,
+                "minutes and",
+                secs,
+                "seconds",
+            )
             print(
                 "As fractal is too big to be loaded into RAM, entering a cmap will save it as an image"
             )
@@ -308,83 +350,224 @@ if __name__ == "__main__":
                 else:
                     if cmap == "OrangeBlue":
                         cmap = newcmp
-                    compileChunks(saveName, cmap=cmap)
+                    compileChunks(fName, cmap=cmap)
                     if not yesNoInput.getInput("Choose a different colour map? y/n"):
                         done = True
 
         else:
-            points = np.ndarray(shape=(yRes, xRes))
+            displayPoints(
+                genFractalImage(
+                    poly, xStart, xEnd, yStart, yEnd, xRes, yRes, fName, useMP
+                )
+            )
 
-            if yesNoInput.getInput("Use multiprocessing? y/n"):
+        # xStepSize = abs((xEnd - xStart) / xRes)
+        # yStepSize = abs((yEnd - yStart) / yRes)
 
-                def f(y, yIndex, xStart, xEnd, xStepSize, poly):
-                    res = []
-                    for x in np.arange(xStart, xEnd, xStepSize):
-                        xIndex = int((x - xStart) / xStepSize)
-                        root = findRoot(complex(x, y), poly)
-                        if root:
-                            for r in range(len(poly.roots)):
-                                if math.isclose(
-                                    root.real, poly.roots[r].real, abs_tol=1e-1
-                                ) and math.isclose(
-                                    root.imag, poly.roots[r].imag, abs_tol=1e-1
-                                ):
-                                    res.append([xIndex, yIndex, r])
-                    return res
+        # memory = psutil.virtual_memory().available
+        # arrSize = (yRes * xRes * 64) / 8
+        # start = None
+        # if arrSize > memory * 0.5:
+        #     print(
+        #         "Insuffient memory to generate image in one go, must save now and compile later"
+        #     )
+        #     cCount = 0
+        #     saveName = input("Enter a name for the fractal;    ")
+        #     with open("Saves/" + saveName + ".txt", "wt") as save:
+        #         start = time.perf_counter()
+        #         rowsCount = 0
+        #         cYRes = math.trunc(
+        #             (0.5 * memory * 8) / (xRes * 64 * 4)
+        #         )  # float64 used for each array index
+        #         numChunks = math.ceil(yRes / cYRes)
+        #         save.write(str(numChunks) + "\n")
+        #         save.write(str(xRes) + " " + str(yRes) + "\n")
+        #         save.flush()
+        #         while rowsCount < yRes:
+        #             cYStart = (
+        #                 int((yStart + rowsCount * yStepSize) / yStepSize) * yStepSize
+        #             )
+        #             cYEnd = (
+        #                 int(
+        #                     (yStart + rowsCount * yStepSize + cYRes * yStepSize)
+        #                     / yStepSize
+        #                 )
+        #                 * yStepSize
+        #             )
+        #             if cYEnd > yEnd:
+        #                 cYEnd = yEnd
 
-                results = []
+        #             rowsCount = rowsCount + cYRes
 
-                start = time.perf_counter()
-                with mp.Pool(mp.cpu_count()) as pool:
-                    for y in np.arange(yStart, yEnd, yStepSize):
-                        yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
-                        results.append(
-                            pool.apply_async(
-                                f,
-                                (
-                                    y,
-                                    yIndex,
-                                    xStart,
-                                    xEnd,
-                                    xStepSize,
-                                    poly,
-                                ),
-                            )
-                        )
+        #             rows = cYRes
+        #             if rowsCount > yRes:
+        #                 rows = cYRes - (rowsCount - yRes)
 
-                    pool.close()
-                    pool.join()
-                    for r in results:
-                        res = r.get()
-                        for p in res:
-                            xIndex = p[0]
-                            yIndex = p[1]
-                            val = p[2]
-                            points[yIndex][xIndex] = val
+        #             chunk = np.ndarray(shape=(rows, xRes))
+        #             save.write(str(rows) + " " + str(xRes) + "\n")
 
-            else:
-                start = time.perf_counter()
-                for x in np.arange(xStart, xEnd, xStepSize):
-                    xIndex = int((x - xStart) / xStepSize)
-                    print(round((xIndex / xRes) * 100, 2), "% Completed")
-                    for y in np.arange(yStart, yEnd, yStepSize):
-                        yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
-                        root = findRoot(complex(x, y), poly)
-                        if root:
-                            for r in range(len(poly.roots)):
-                                if math.isclose(
-                                    root.real, poly.roots[r].real, abs_tol=1e-1
-                                ) and math.isclose(
-                                    root.imag, poly.roots[r].imag, abs_tol=1e-1
-                                ):
-                                    points[yIndex][xIndex] = r
+        #             print(
+        #                 "Processing chunk "
+        #                 + str(math.ceil(rowsCount / cYRes))
+        #                 + "/"
+        #                 + str(numChunks)
+        #             )
 
-            print("100% Completed")
-            timeTaken = time.perf_counter() - start
-            hrs = math.trunc(timeTaken / (60**2))
-            mins = math.trunc((timeTaken - hrs * 60**2) / 60)
-            secs = math.trunc((timeTaken - hrs * 60**2 - mins * 60))
-            print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
-            if yesNoInput.getInput("Save? y/n"):
-                np.savetxt("Saves/" + input("Fractal name;   ") + ".txt", points)
-            displayPoints(points)
+        #             def f(y, yIndex, xStart, xEnd, xStepSize, poly):
+        #                 res = []
+        #                 for x in np.arange(xStart, xEnd, xStepSize):
+        #                     xIndex = int((x - xStart) / xStepSize)
+        #                     root, rootFound = findRoot(complex(x, y), poly)
+        #                     if rootFound:
+        #                         for r in range(len(poly.roots)):
+        #                             if math.isclose(
+        #                                 root.real, poly.roots[r].real, abs_tol=1e-1
+        #                             ) and math.isclose(
+        #                                 root.imag, poly.roots[r].imag, abs_tol=1e-1
+        #                             ):
+        #                                 res.append([xIndex, yIndex, r])
+        #                 return res
+
+        #             results = []
+
+        #             with closing(mp.Pool(mp.cpu_count())) as pool:
+        #                 for y in np.arange(cYStart, cYEnd, yStepSize):
+        #                     h = hpy()
+        #                     print("memory at y=" + str(y) + " :", h.iso(chunk))
+        #                     yIndex = int((y - yStart) / yStepSize)
+        #                     results.append(
+        #                         pool.apply_async(
+        #                             f,
+        #                             (
+        #                                 y,
+        #                                 yIndex,
+        #                                 xStart,
+        #                                 xEnd,
+        #                                 xStepSize,
+        #                                 poly,
+        #                             ),
+        #                         )
+        #                     )
+
+        #                 pool.close()
+        #                 pool.join()
+        #                 pool.terminate()
+
+        #             for r in results:
+        #                 res = r.get()
+        #                 for p in res:
+        #                     xIndex = p[0]
+        #                     yIndex = p[1]
+        #                     val = p[2]
+        #                     chunk[yIndex % cYRes][xIndex] = val
+
+        #             np.savetxt("Saves/" + saveName + str(cCount) + ".txt", chunk)
+
+        #             cCount += 1
+        #             chunk = None
+
+        #     print("100% Completed")
+        #     timeTaken = time.perf_counter() - start
+        #     hrs = math.trunc(timeTaken / (60**2))
+        #     mins = math.trunc((timeTaken - hrs * 60**2) / 60)
+        #     secs = math.trunc((timeTaken - hrs * 60**2 - mins * 60))
+        #     print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
+        #     print(
+        #         "As fractal is too big to be loaded into RAM, entering a cmap will save it as an image"
+        #     )
+
+        #     top = cm.get_cmap("Oranges_r", 128)
+        #     bottom = cm.get_cmap("Blues", 128)
+        #     newcolors = np.vstack(
+        #         (top(np.linspace(0, 1, 128)), bottom(np.linspace(0, 1, 128)))
+        #     )
+        #     newcmp = ListedColormap(newcolors, name="OrangeBlue")
+
+        #     done = False
+        #     while not done:
+        #         cmap = input("Enter a colour map (v to view all cmaps);   ")
+        #         if cmap == "v":
+        #             print(plt.colormaps())
+        #         else:
+        #             if cmap == "OrangeBlue":
+        #                 cmap = newcmp
+        #             compileChunks(saveName, cmap=cmap)
+        #             if not yesNoInput.getInput("Choose a different colour map? y/n"):
+        #                 done = True
+
+        # else:
+        #     points = np.ndarray(shape=(yRes, xRes))
+
+        #     if yesNoInput.getInput("Use multiprocessing? y/n"):
+
+        #         def f(y, yIndex, xStart, xEnd, xStepSize, poly):
+        #             res = []
+        #             for x in np.arange(xStart, xEnd, xStepSize):
+        #                 xIndex = int((x - xStart) / xStepSize)
+        #                 root, rootFound = findRoot(complex(x, y), poly)
+        #                 if rootFound:
+        #                     for r in range(len(poly.roots)):
+        #                         if math.isclose(
+        #                             root.real, poly.roots[r].real, abs_tol=1e-1
+        #                         ) and math.isclose(
+        #                             root.imag, poly.roots[r].imag, abs_tol=1e-1
+        #                         ):
+        #                             res.append([xIndex, yIndex, r])
+        #             return res
+
+        #         results = []
+
+        #         start = time.perf_counter()
+        #         with mp.Pool(mp.cpu_count()) as pool:
+        #             for y in np.arange(yStart, yEnd, yStepSize):
+        #                 yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
+        #                 results.append(
+        #                     pool.apply_async(
+        #                         f,
+        #                         (
+        #                             y,
+        #                             yIndex,
+        #                             xStart,
+        #                             xEnd,
+        #                             xStepSize,
+        #                             poly,
+        #                         ),
+        #                     )
+        #                 )
+
+        #             pool.close()
+        #             pool.join()
+        #             for r in results:
+        #                 res = r.get()
+        #                 for p in res:
+        #                     xIndex = p[0]
+        #                     yIndex = p[1]
+        #                     val = p[2]
+        #                     points[yIndex][xIndex] = val
+
+        #     else:
+        #         start = time.perf_counter()
+        #         for x in np.arange(xStart, xEnd, xStepSize):
+        #             xIndex = int((x - xStart) / xStepSize)
+        #             print(round((xIndex / xRes) * 100, 2), "% Completed")
+        #             for y in np.arange(yStart, yEnd, yStepSize):
+        #                 yIndex = int(yRes - 1 - (y - yStart) / yStepSize)
+        #                 root = findRoot(complex(x, y), poly)
+        #                 if root:
+        #                     for r in range(len(poly.roots)):
+        #                         if math.isclose(
+        #                             root.real, poly.roots[r].real, abs_tol=1e-1
+        #                         ) and math.isclose(
+        #                             root.imag, poly.roots[r].imag, abs_tol=1e-1
+        #                         ):
+        #                             points[yIndex][xIndex] = r
+
+        #     print("100% Completed")
+        #     timeTaken = time.perf_counter() - start
+        #     hrs = math.trunc(timeTaken / (60**2))
+        #     mins = math.trunc((timeTaken - hrs * 60**2) / 60)
+        #     secs = math.trunc((timeTaken - hrs * 60**2 - mins * 60))
+        #     print("Time taken: ", hrs, "hours,", mins, "minutes and", secs, "seconds")
+        #     if yesNoInput.getInput("Save? y/n"):
+        #         np.savetxt("Saves/" + input("Fractal name;   ") + ".txt", points)
+        #     displayPoints(points)
