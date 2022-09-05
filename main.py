@@ -266,10 +266,9 @@ if __name__ == "__main__":
                 start = time.perf_counter()
                 rowsCount = 0
                 cCount = 0
-                # cYRes = math.trunc(
-                #     (0.5 * memory * 8) / (xRes * 64 * 4)
-                # )  # float64 used fo each array index
-                cYRes = 100
+                cYRes = math.trunc(
+                    (7680 * 4320) / (xRes)
+                )  # float64 used fo each array index
                 numChunks = math.ceil(yRes / cYRes)
                 save.write(str(numChunks) + "\n")
                 save.write(str(xRes) + " " + str(yRes) + "\n")
