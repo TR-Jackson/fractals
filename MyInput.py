@@ -16,11 +16,10 @@ class Input:
                     return False
             else:
                 try:
-                    match self.type:
-                        case "int":
-                            val = int(val)
-                        case "float":
-                            val = float(val)
+                    if self.type == "int":
+                        val = int(val)
+                    elif self.type == "float":
+                        val = float(val)
                     return val
                 except:
                     continue
